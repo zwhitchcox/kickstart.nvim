@@ -212,6 +212,126 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
+-- Terminal mode window navigation
+vim.keymap.set('t', '<C-h>', '<C-\\><C-n><C-w>h', { desc = 'Move to left window' })
+vim.keymap.set('t', '<C-j>', '<C-\\><C-n><C-w>j', { desc = 'Move to lower window' })
+vim.keymap.set('t', '<C-k>', '<C-\\><C-n><C-w>k', { desc = 'Move to upper window' })
+vim.keymap.set('t', '<C-l>', '<C-\\><C-n><C-w>l', { desc = 'Move to right window' })
+
+-- Enter clears search highlight if active, otherwise normal Enter
+vim.keymap.set('n', '<CR>', function()
+  if vim.v.hlsearch == 1 then
+    vim.cmd.nohl()
+    return ''
+  else
+    return vim.keycode '<CR>'
+  end
+end, { expr = true, desc = 'Clear search highlight or Enter' })
+
+-- Diagnostic navigation with float popup
+vim.keymap.set('n', ']d', function() vim.diagnostic.jump { count = 1, float = true } end, { desc = 'Next diagnostic' })
+vim.keymap.set('n', '[d', function() vim.diagnostic.jump { count = -1, float = true } end, { desc = 'Prev diagnostic' })
+
+-- Resize splits with Alt keys
+vim.keymap.set('n', '<M-,>', '<C-w>5<', { desc = 'Shrink window width' })
+vim.keymap.set('n', '<M-.>', '<C-w>5>', { desc = 'Grow window width' })
+vim.keymap.set('n', '<M-t>', '<C-w>+', { desc = 'Grow window height' })
+vim.keymap.set('n', '<M-s>', '<C-w>-', { desc = 'Shrink window height' })
+--
+-- Smart j/k - use visual lines when no count, actual lines with count
+vim.keymap.set('n', 'j', function() return vim.v.count == 0 and 'gj' or 'j' end, { expr = true, desc = 'Down (visual line if no count)' })
+
+vim.keymap.set('n', 'k', function() return vim.v.count == 0 and 'gk' or 'k' end, { expr = true, desc = 'Up (visual line if no count)' })
+
+-- Helper: get list of modified files from git
+local function get_modified_files()
+  local handle = io.popen 'git diff --name-only 2>/dev/null'
+  if not handle then return {} end
+  local result = handle:read '*a'
+  handle:close()
+  local files = {}
+  local cwd = vim.fn.getcwd() .. '/'
+  for file in result:gmatch '[^\n]+' do
+    table.insert(files, cwd .. file)
+  end
+  return files
+end
+
+-- Alt+j/k to navigate git hunks in current file (wraps around)
+vim.keymap.set('n', '<M-j>', function()
+  local gs = require 'gitsigns'
+  gs.nav_hunk('next', { wrap = true })
+end, { desc = 'Next git hunk' })
+
+vim.keymap.set('n', '<M-k>', function()
+  local gs = require 'gitsigns'
+  gs.nav_hunk('prev', { wrap = true })
+end, { desc = 'Prev git hunk' })
+
+-- Alt+h/l to navigate between modified files
+vim.keymap.set('n', '<M-h>', function()
+  local files = get_modified_files()
+  if #files == 0 then
+    vim.notify('No modified files', vim.log.levels.INFO)
+    return
+  end
+  local current = vim.fn.expand '%:p'
+  for i, file in ipairs(files) do
+    if file == current then
+      local prev = files[i - 1] or files[#files]
+      vim.cmd.edit(prev)
+      return
+    end
+  end
+  vim.cmd.edit(files[#files])
+end, { desc = 'Prev modified file' })
+
+vim.keymap.set('n', '<M-l>', function()
+  local files = get_modified_files()
+  if #files == 0 then
+    vim.notify('No modified files', vim.log.levels.INFO)
+    return
+  end
+  local current = vim.fn.expand '%:p'
+  for i, file in ipairs(files) do
+    if file == current then
+      local next_file = files[i + 1] or files[1]
+      vim.cmd.edit(next_file)
+      return
+    end
+  end
+  vim.cmd.edit(files[1])
+end, { desc = 'Next modified file' })
+
+-- Track last editor window and jump back to it with Ctrl+;
+vim.g.last_editor_win = nil
+
+vim.api.nvim_create_autocmd('WinLeave', {
+  callback = function()
+    local buf = vim.api.nvim_get_current_buf()
+    if vim.bo[buf].buftype == '' then vim.g.last_editor_win = vim.api.nvim_get_current_win() end
+  end,
+})
+
+-- Auto enter insert mode when entering a terminal buffer (except OpenCode)
+vim.api.nvim_create_autocmd('BufEnter', {
+  callback = function()
+    vim.schedule(function()
+      local bufname = vim.api.nvim_buf_get_name(0)
+      -- Skip OpenCode only
+      if bufname:match 'opencode' then return end
+      if vim.bo.buftype == 'terminal' and vim.api.nvim_get_mode().mode ~= 't' then vim.cmd 'startinsert' end
+    end)
+  end,
+})
+
+vim.keymap.set({ 'n', 't' }, '<C-;>', function()
+  if vim.g.last_editor_win and vim.api.nvim_win_is_valid(vim.g.last_editor_win) then
+    vim.cmd 'stopinsert'
+    vim.api.nvim_set_current_win(vim.g.last_editor_win)
+  end
+end, { desc = 'Go to last editor window' })
+
 -- NOTE: Some terminals have colliding keymaps or are not able to send distinct keycodes
 -- vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
 -- vim.keymap.set("n", "<C-S-l>", "<C-w>L", { desc = "Move window to the right" })
@@ -814,6 +934,51 @@ require('lazy').setup({
   -- Highlight todo, notes, etc in comments
   { 'folke/todo-comments.nvim', event = 'VimEnter', dependencies = { 'nvim-lua/plenary.nvim' }, opts = { signs = false } },
 
+  { -- Terminal management
+    'akinsho/toggleterm.nvim',
+    version = '*',
+    config = function()
+      require('toggleterm').setup {
+        size = function(term)
+          if term.direction == 'horizontal' then
+            return 12
+          elseif term.direction == 'vertical' then
+            return vim.o.columns * 0.4
+          end
+        end,
+        shade_terminals = false,
+        start_in_insert = true,
+        persist_size = true,
+        close_on_exit = true,
+        direction = 'horizontal',
+        float_opts = {
+          border = 'curved',
+          width = math.floor(vim.o.columns * 0.8),
+          height = math.floor(vim.o.lines * 0.8),
+        },
+      }
+
+      local Terminal = require('toggleterm.terminal').Terminal
+
+      -- Floating terminal
+      local float_term = Terminal:new { direction = 'float', hidden = true }
+
+      -- Keymaps
+      vim.keymap.set({ 'n', 't' }, '<leader>ot', '<cmd>ToggleTerm direction=horizontal<CR>', { desc = 'Toggle terminal' })
+      vim.keymap.set({ 'n', 't' }, '<C-\\>', function() float_term:toggle() end, { desc = 'Toggle float terminal' })
+      vim.keymap.set('n', '<leader>on', function()
+        local terms = require('toggleterm.terminal').get_all()
+        local next_id = #terms + 1
+        vim.cmd(next_id .. 'ToggleTerm direction=horizontal')
+      end, { desc = 'New terminal' })
+
+      -- Navigate between terminals
+      vim.keymap.set('n', '<leader>o1', '<cmd>1ToggleTerm<CR>', { desc = 'Terminal 1' })
+      vim.keymap.set('n', '<leader>o2', '<cmd>2ToggleTerm<CR>', { desc = 'Terminal 2' })
+      vim.keymap.set('n', '<leader>o3', '<cmd>3ToggleTerm<CR>', { desc = 'Terminal 3' })
+    end,
+  },
+
   { -- Collection of various small independent plugins/modules
     'nvim-mini/mini.nvim',
     config = function()
@@ -905,11 +1070,11 @@ require('lazy').setup({
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
   -- require 'kickstart.plugins.debug',
-  -- require 'kickstart.plugins.indent_line',
   -- require 'kickstart.plugins.lint',
-  -- require 'kickstart.plugins.autopairs',
-  -- require 'kickstart.plugins.neo-tree',
-  -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
+  require 'kickstart.plugins.indent_line',
+  require 'kickstart.plugins.autopairs',
+  require 'kickstart.plugins.neo-tree',
+  require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
   --    This is the easiest way to modularize your config.
