@@ -104,6 +104,11 @@ vim.o.number = true
 --  Experiment for yourself to see if you like it!
 vim.o.relativenumber = true
 
+-- Default tab settings
+vim.o.tabstop = 2
+vim.o.shiftwidth = 2
+vim.o.expandtab = true
+
 -- Enable mouse mode, can be useful for resizing splits for example!
 vim.o.mouse = 'a'
 
@@ -202,6 +207,18 @@ vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' }
 -- vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
 -- vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
 -- vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
+
+-- Restore buffer options after closing diff mode
+vim.api.nvim_create_autocmd('OptionSet', {
+  pattern = 'diff',
+  callback = function()
+    if not vim.o.diff then
+      -- Re-trigger filetype detection to restore proper settings
+      vim.cmd 'filetype detect'
+    end
+  end,
+  desc = 'Restore settings after diff mode',
+})
 
 -- Keybinds to make split navigation easier.
 --  Use CTRL+<hjkl> to switch between windows
@@ -1062,9 +1079,7 @@ require('lazy').setup({
         local all_pids = vim.fn.system 'pgrep -f "opencode.*--port"'
         for pid in all_pids:gmatch '%d+' do
           local lsof = vim.fn.system('lsof -p ' .. pid .. ' 2>/dev/null | grep cwd')
-          if lsof:find(dir, 1, true) then
-            table.insert(pids, pid)
-          end
+          if lsof:find(dir, 1, true) then table.insert(pids, pid) end
         end
         return pids
       end
@@ -1084,9 +1099,7 @@ require('lazy').setup({
           end
           -- Only kill PIDs that weren't there at startup
           for _, pid in ipairs(current_pids) do
-            if not existing_set[pid] then
-              vim.fn.system('kill ' .. pid)
-            end
+            if not existing_set[pid] then vim.fn.system('kill ' .. pid) end
           end
         end,
         desc = 'Kill opencode server on exit',
