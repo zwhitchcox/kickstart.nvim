@@ -528,6 +528,16 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
       vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
       vim.keymap.set('n', '<leader>sc', builtin.commands, { desc = '[S]earch [C]ommands' })
+      vim.keymap.set(
+        'n',
+        '<leader>sm',
+        function()
+          builtin.find_files {
+            find_command = { 'fd', '--type', 'f', '--exec-batch', 'ls', '-t' },
+          }
+        end,
+        { desc = '[S]earch by [M]time (recent first)' }
+      )
       vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
 
       -- This runs on LSP attach per buffer (see main LSP attach function in 'neovim/nvim-lspconfig' config for more info,
@@ -1043,6 +1053,45 @@ require('lazy').setup({
       -- Required for `opts.events.reload`.
       vim.o.autoread = true
 
+      -- Track OpenCode servers we've connected to in this session
+      vim.g.opencode_session_ports = {}
+
+      -- Helper to get OpenCode servers for a directory
+      local function get_opencode_pids_for_dir(dir)
+        local pids = {}
+        local all_pids = vim.fn.system 'pgrep -f "opencode.*--port"'
+        for pid in all_pids:gmatch '%d+' do
+          local lsof = vim.fn.system('lsof -p ' .. pid .. ' 2>/dev/null | grep cwd')
+          if lsof:find(dir, 1, true) then
+            table.insert(pids, pid)
+          end
+        end
+        return pids
+      end
+
+      -- On startup: remember existing servers (so we don't kill them on exit)
+      local startup_pids = get_opencode_pids_for_dir(vim.fn.getcwd())
+      vim.g.opencode_existing_pids = startup_pids
+
+      -- Kill OpenCode server process on exit, but only ones started after this Neovim session
+      vim.api.nvim_create_autocmd('VimLeavePre', {
+        callback = function()
+          local current_pids = get_opencode_pids_for_dir(vim.fn.getcwd())
+          local existing = vim.g.opencode_existing_pids or {}
+          local existing_set = {}
+          for _, pid in ipairs(existing) do
+            existing_set[pid] = true
+          end
+          -- Only kill PIDs that weren't there at startup
+          for _, pid in ipairs(current_pids) do
+            if not existing_set[pid] then
+              vim.fn.system('kill ' .. pid)
+            end
+          end
+        end,
+        desc = 'Kill opencode server on exit',
+      })
+
       -- Recommended/example keymaps.
       vim.keymap.set({ 'n', 'x' }, '<C-a>', function() require('opencode').ask('@this: ', { submit = true }) end, { desc = 'Ask opencode…' })
       vim.keymap.set({ 'n', 'x' }, '<C-x>', function() require('opencode').select() end, { desc = 'Execute opencode action…' })
@@ -1050,6 +1099,15 @@ require('lazy').setup({
 
       vim.keymap.set({ 'n', 'x' }, 'go', function() return require('opencode').operator '@this ' end, { desc = 'Add range to opencode', expr = true })
       vim.keymap.set('n', 'goo', function() return require('opencode').operator '@this ' .. '_' end, { desc = 'Add line to opencode', expr = true })
+
+      -- Send to OpenCode AND focus it
+      vim.keymap.set('x', 'gO', function()
+        local opencode = require 'opencode'
+        -- Get visual selection and send to opencode
+        vim.cmd 'normal! "vy'
+        local text = vim.fn.getreg 'v'
+        opencode.ask('@this ' .. text, { submit = false })
+      end, { desc = 'Send to opencode and focus' })
 
       vim.keymap.set('n', '<S-C-u>', function() require('opencode').command 'session.half.page.up' end, { desc = 'Scroll opencode up' })
       vim.keymap.set('n', '<S-C-d>', function() require('opencode').command 'session.half.page.down' end, { desc = 'Scroll opencode down' })

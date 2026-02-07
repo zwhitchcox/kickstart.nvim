@@ -14,12 +14,31 @@ return {
     { '\\', ':Neotree reveal<CR>', desc = 'NeoTree reveal', silent = true },
   },
   opts = {
+    -- Sync tree root with cwd
     filesystem = {
+      follow_current_file = {
+        enabled = true, -- Highlight current file in tree
+      },
+      use_libuv_file_watcher = true, -- Auto-refresh on file changes
+      filtered_items = {
+        hide_dotfiles = false,
+        hide_gitignored = false,
+      },
       window = {
         mappings = {
           ['\\'] = 'close_window',
+          ['l'] = 'open', -- Open file/folder
+          ['h'] = 'close_node', -- Close folder
+          ['v'] = 'open_vsplit', -- Open in vertical split
+          ['s'] = 'open_split', -- Open in horizontal split
+          ['u'] = 'navigate_up', -- Go up one directory
+          ['C'] = 'set_root', -- Set folder as root
         },
       },
+    },
+    window = {
+      width = 30,
+      position = 'left',
     },
   },
 }
