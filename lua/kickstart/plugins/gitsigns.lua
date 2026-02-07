@@ -6,6 +6,11 @@ return {
   {
     'lewis6991/gitsigns.nvim',
     opts = {
+      current_line_blame = false, -- Toggle with <leader>tb
+      current_line_blame_opts = {
+        delay = 300,
+        virt_text_pos = 'eol',
+      },
       on_attach = function(bufnr)
         local gitsigns = require 'gitsigns'
 
@@ -48,8 +53,21 @@ return {
         map('n', '<leader>hD', function() gitsigns.diffthis '@' end, { desc = 'git [D]iff against last commit' })
         map('n', '<leader>hq', function() gitsigns.setqflist 'all' end, { desc = 'All [h]unks to [q]uickfix' })
         -- Toggles
-        map('n', '<leader>tb', gitsigns.toggle_current_line_blame, { desc = '[T]oggle git show [b]lame line' })
-        map('n', '<leader>tD', gitsigns.preview_hunk_inline, { desc = '[T]oggle git show [D]eleted' })
+        map('n', '<leader>tb', function() gitsigns.toggle_current_line_blame() end, { desc = '[T]oggle git show [b]lame line' })
+        map('n', '<leader>tD', function() gitsigns.preview_hunk_inline() end, { desc = '[T]oggle git show [D]eleted' })
+
+        -- Full blame view (toggle)
+        vim.g.gitsigns_blame_open = false
+        map('n', '<leader>hB', function()
+          if vim.g.gitsigns_blame_open then
+            -- Close blame by going back to previous buffer
+            vim.cmd 'close'
+            vim.g.gitsigns_blame_open = false
+          else
+            gitsigns.blame()
+            vim.g.gitsigns_blame_open = true
+          end
+        end, { desc = 'git [B]lame (full file toggle)' })
       end,
     },
   },

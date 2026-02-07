@@ -1024,6 +1024,13 @@ require('lazy').setup({
       -- - sr)'  - [S]urround [R]eplace [)] [']
       require('mini.surround').setup()
 
+      -- Toggle inline diff overlay using git diff output as virtual text
+      vim.keymap.set('n', '<leader>ho', function()
+        -- Use gitsigns preview_hunk_inline for all hunks
+        local gitsigns = require 'gitsigns'
+        gitsigns.toggle_deleted()
+      end, { desc = 'Toggle deleted lines overlay' })
+
       -- Simple and easy statusline.
       --  You could remove this setup call if you don't like it,
       --  and try some other statusline plugin
