@@ -263,28 +263,47 @@ vim.keymap.set('n', 'j', function() return vim.v.count == 0 and 'gj' or 'j' end,
 
 vim.keymap.set('n', 'k', function() return vim.v.count == 0 and 'gk' or 'k' end, { expr = true, desc = 'Up (visual line if no count)' })
 
--- Helper: get list of modified files from git
+-- Helper: get list of modified + untracked files from git
 local function get_modified_files()
-  local handle = io.popen 'git diff --name-only 2>/dev/null'
+  local handle = io.popen 'git diff --name-only 2>/dev/null && git ls-files --others --exclude-standard 2>/dev/null'
   if not handle then return {} end
   local result = handle:read '*a'
   handle:close()
+  local seen = {}
   local files = {}
   local cwd = vim.fn.getcwd() .. '/'
   for file in result:gmatch '[^\n]+' do
-    table.insert(files, cwd .. file)
+    local full = cwd .. file
+    if not seen[full] then
+      seen[full] = true
+      table.insert(files, full)
+    end
   end
   return files
 end
 
 -- Alt+j/k to navigate git hunks in current file (wraps around)
-vim.keymap.set('n', '<M-j>', function()
-  MiniDiff.goto_hunk('next')
-end, { desc = 'Next git hunk' })
+-- Falls back to next/prev modified file for untracked files (no hunks to navigate)
+local function goto_hunk_or_file(direction)
+  local ok = pcall(MiniDiff.goto_hunk, direction)
+  if not ok then
+    -- No hunks (untracked file) -- jump to next/prev modified file
+    local files = get_modified_files()
+    if #files == 0 then return end
+    local current = vim.fn.expand '%:p'
+    for i, file in ipairs(files) do
+      if file == current then
+        local target = direction == 'next' and (files[i + 1] or files[1]) or (files[i - 1] or files[#files])
+        vim.cmd.edit(target)
+        return
+      end
+    end
+    vim.cmd.edit(direction == 'next' and files[1] or files[#files])
+  end
+end
 
-vim.keymap.set('n', '<M-k>', function()
-  MiniDiff.goto_hunk('prev')
-end, { desc = 'Prev git hunk' })
+vim.keymap.set('n', '<M-j>', function() goto_hunk_or_file 'next' end, { desc = 'Next git hunk' })
+vim.keymap.set('n', '<M-k>', function() goto_hunk_or_file 'prev' end, { desc = 'Prev git hunk' })
 
 -- Alt+h/l to navigate between modified files
 vim.keymap.set('n', '<M-h>', function()
@@ -1029,6 +1048,28 @@ require('lazy').setup({
           wrap_goto = true, -- Wrap around when navigating hunks
         },
       }
+
+      -- Stage/reset hunk under cursor (falls back to `git add` for untracked files)
+      local function stage_hunk(opts)
+        local ok, err = pcall(MiniDiff.do_hunks, 0, 'apply', opts)
+        if not ok and type(err) == 'string' and err:find 'no reference text' then
+          -- Untracked file: stage the whole file
+          local file = vim.fn.expand '%'
+          vim.fn.system('git add -- ' .. vim.fn.shellescape(file))
+          vim.notify('Staged untracked file: ' .. file, vim.log.levels.INFO)
+        elseif not ok then
+          error(err)
+        end
+      end
+      vim.keymap.set('n', '<leader>hs', function() stage_hunk({ line_start = vim.fn.line '.', line_end = vim.fn.line '.' }) end, { desc = '[H]unk [S]tage' })
+      vim.keymap.set('n', '<leader>hr', function() MiniDiff.do_hunks(0, 'reset', { line_start = vim.fn.line '.', line_end = vim.fn.line '.' }) end, { desc = '[H]unk [R]eset' })
+      vim.keymap.set('x', '<leader>hs', function()
+        local start = vim.fn.line 'v'
+        local finish = vim.fn.line '.'
+        if start > finish then start, finish = finish, start end
+        vim.cmd 'normal! '
+        stage_hunk({ line_start = start, line_end = finish })
+      end, { desc = '[H]unk [S]tage selection' })
 
       -- Global diff overlay toggle
       vim.g.minidiff_overlay_enabled = false
