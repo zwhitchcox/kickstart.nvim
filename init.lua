@@ -1156,39 +1156,22 @@ require('lazy').setup({
       -- Required for `opts.events.reload`.
       vim.o.autoread = true
 
-      -- Track OpenCode servers we've connected to in this session
-      vim.g.opencode_session_ports = {}
-
-      -- Helper to get OpenCode servers for a directory
-      local function get_opencode_pids_for_dir(dir)
-        local pids = {}
-        local all_pids = vim.fn.system 'pgrep -f "opencode.*--port"'
-        for pid in all_pids:gmatch '%d+' do
-          local lsof = vim.fn.system('lsof -p ' .. pid .. ' 2>/dev/null | grep cwd')
-          if lsof:find(dir, 1, true) then table.insert(pids, pid) end
-        end
-        return pids
-      end
-
-      -- On startup: remember existing servers (so we don't kill them on exit)
-      local startup_pids = get_opencode_pids_for_dir(vim.fn.getcwd())
-      vim.g.opencode_existing_pids = startup_pids
-
-      -- Kill OpenCode server process on exit, but only ones started after this Neovim session
+      -- Kill the connected opencode server process on exit.
+      -- The plugin's built-in provider.stop() only closes the terminal window,
+      -- but the opencode process keeps running in the background.
       vim.api.nvim_create_autocmd('VimLeavePre', {
         callback = function()
-          local current_pids = get_opencode_pids_for_dir(vim.fn.getcwd())
-          local existing = vim.g.opencode_existing_pids or {}
-          local existing_set = {}
-          for _, pid in ipairs(existing) do
-            existing_set[pid] = true
-          end
-          -- Only kill PIDs that weren't there at startup
-          for _, pid in ipairs(current_pids) do
-            if not existing_set[pid] then vim.fn.system('kill ' .. pid) end
+          local events = require 'opencode.events'
+          if events.connected_server then
+            local port = events.connected_server.port
+            -- Find the PID listening on this port and kill it
+            local lsof = vim.fn.system('lsof -w -iTCP:' .. port .. ' -sTCP:LISTEN -t 2>/dev/null')
+            for pid in lsof:gmatch '%d+' do
+              vim.fn.system('kill ' .. pid)
+            end
           end
         end,
-        desc = 'Kill opencode server on exit',
+        desc = 'Kill opencode server process on exit',
       })
 
       -- Recommended/example keymaps.
