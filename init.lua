@@ -1151,28 +1151,87 @@ require('lazy').setup({
     config = function()
       ---@type opencode.Opts
       vim.g.opencode_opts = {
-        -- Your configuration, if any — see `lua/opencode/config.lua`, or "goto definition" on the type or field.
+        provider = {
+          cmd = 'opencode -c --port', -- -c resumes the last session on startup
+        },
       }
 
       -- Required for `opts.events.reload`.
       vim.o.autoread = true
 
-      -- Kill the connected opencode server process on exit.
-      -- The plugin's built-in provider.stop() only closes the terminal window,
-      -- but the opencode process keeps running in the background.
-      vim.api.nvim_create_autocmd('VimLeavePre', {
+      -- Helper: find opencode server ports/pids for cwd
+      local function get_opencode_servers()
+        local servers = {}
+        local result = vim.fn.system 'lsof -w -iTCP -sTCP:LISTEN -P -n 2>/dev/null'
+        for line in result:gmatch '[^\n]+' do
+          local pid, port = line:match 'opencode%s+(%d+).-TCP%s+%S-:(%d+)%s'
+          if pid and port then
+            local cwd = vim.fn.system('lsof -p ' .. pid .. ' 2>/dev/null')
+            if cwd:find(vim.fn.getcwd(), 1, true) then table.insert(servers, { pid = pid, port = port }) end
+          end
+        end
+        return servers
+      end
+
+      local function opencode_publish(port, event)
+        vim.fn.system {
+          'curl',
+          '-s',
+          '--connect-timeout',
+          '1',
+          '-X',
+          'POST',
+          '-H',
+          'Content-Type: application/json',
+          '-d',
+          vim.fn.json_encode(event),
+          'http://localhost:' .. port .. '/tui/publish',
+        }
+      end
+
+      local function opencode_command(port, cmd) opencode_publish(port, { type = 'tui.command.execute', properties = { command = cmd } }) end
+
+      -- Stash prompt on QuitPre (before snacks ExitPre closes the terminal and kills the process).
+      -- Kill server on VimLeavePre (after snacks has closed the window).
+      vim.api.nvim_create_autocmd('QuitPre', {
         callback = function()
-          local events = require 'opencode.events'
-          if events.connected_server then
-            local port = events.connected_server.port
-            -- Find the PID listening on this port and kill it
-            local lsof = vim.fn.system('lsof -w -iTCP:' .. port .. ' -sTCP:LISTEN -t 2>/dev/null')
-            for pid in lsof:gmatch '%d+' do
-              vim.fn.system('kill ' .. pid)
-            end
+          for _, srv in ipairs(get_opencode_servers()) do
+            opencode_command(srv.port, 'prompt.stash')
           end
         end,
-        desc = 'Kill opencode server process on exit',
+        desc = 'Stash opencode prompt before exit',
+      })
+      vim.api.nvim_create_autocmd('VimLeavePre', {
+        callback = function()
+          for _, srv in ipairs(get_opencode_servers()) do
+            vim.fn.system('kill ' .. srv.pid)
+          end
+        end,
+        desc = 'Kill opencode server on exit',
+      })
+
+      -- Pop stashed prompt when opencode terminal opens (retry until server is ready).
+      local stash_popped = false
+      vim.api.nvim_create_autocmd('TermOpen', {
+        callback = function()
+          if stash_popped then return end
+          if not vim.api.nvim_buf_get_name(0):find 'opencode' then return end
+          stash_popped = true
+          local attempts = 0
+          local function try_pop()
+            attempts = attempts + 1
+            local servers = get_opencode_servers()
+            if #servers > 0 then
+              for _, srv in ipairs(servers) do
+                opencode_command(srv.port, 'prompt.stash.pop')
+              end
+            elseif attempts < 10 then
+              vim.defer_fn(try_pop, 1000)
+            end
+          end
+          vim.defer_fn(try_pop, 2000)
+        end,
+        desc = 'Pop stashed opencode prompt on startup',
       })
 
       -- Recommended/example keymaps.
