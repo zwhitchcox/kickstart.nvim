@@ -1020,12 +1020,12 @@ require('lazy').setup({
 
       -- mini.diff: Git hunk visualization and management
       -- Overlay highlight groups: red for old/deleted, green for new/added
-      vim.api.nvim_set_hl(0, 'MiniDiffOverAdd', { bg = '#1a3a1a', fg = '#a6e3a1' })        -- Added lines: green
-      vim.api.nvim_set_hl(0, 'MiniDiffOverDelete', { bg = '#3a1a1a', fg = '#f38ba8' })     -- Deleted lines: red
-      vim.api.nvim_set_hl(0, 'MiniDiffOverChange', { bg = '#3a1a1a', fg = '#f38ba8' })     -- Changed ref text (old): red
-      vim.api.nvim_set_hl(0, 'MiniDiffOverChangeBuf', { bg = '#1a3a1a', fg = '#a6e3a1' })  -- Changed buf text (new): green
-      vim.api.nvim_set_hl(0, 'MiniDiffOverContext', { fg = '#6c7086' })                    -- Unchanged parts of ref line: dim
-      vim.api.nvim_set_hl(0, 'MiniDiffOverContextBuf', { fg = '#6c7086' })                 -- Unchanged parts of buf line: dim
+      vim.api.nvim_set_hl(0, 'MiniDiffOverAdd', { bg = '#1a3a1a', fg = '#a6e3a1' }) -- Added lines: green
+      vim.api.nvim_set_hl(0, 'MiniDiffOverDelete', { bg = '#3a1a1a', fg = '#f38ba8' }) -- Deleted lines: red
+      vim.api.nvim_set_hl(0, 'MiniDiffOverChange', { bg = '#3a1a1a', fg = '#f38ba8' }) -- Changed ref text (old): red
+      vim.api.nvim_set_hl(0, 'MiniDiffOverChangeBuf', { bg = '#1a3a1a', fg = '#a6e3a1' }) -- Changed buf text (new): green
+      vim.api.nvim_set_hl(0, 'MiniDiffOverContext', { fg = '#6c7086' }) -- Unchanged parts of ref line: dim
+      vim.api.nvim_set_hl(0, 'MiniDiffOverContextBuf', { fg = '#6c7086' }) -- Unchanged parts of buf line: dim
 
       require('mini.diff').setup {
         view = {
@@ -1033,8 +1033,8 @@ require('lazy').setup({
           signs = { add = '+', change = '~', delete = '_' },
         },
         mappings = {
-          apply = 'gh',  -- Stage hunks (operator: ghgh for current hunk, vipgh for paragraph)
-          reset = 'gH',  -- Reset hunks (operator: gHgH for current hunk)
+          apply = 'gh', -- Stage hunks (operator: ghgh for current hunk, vipgh for paragraph)
+          reset = 'gH', -- Reset hunks (operator: gHgH for current hunk)
           textobject = 'gh', -- Hunk textobject (e.g. vgh, dgh)
           goto_first = '[H',
           goto_prev = '[h',
@@ -1061,14 +1061,21 @@ require('lazy').setup({
           error(err)
         end
       end
-      vim.keymap.set('n', '<leader>hs', function() stage_hunk({ line_start = vim.fn.line '.', line_end = vim.fn.line '.' }) end, { desc = '[H]unk [S]tage' })
-      vim.keymap.set('n', '<leader>hr', function() MiniDiff.do_hunks(0, 'reset', { line_start = vim.fn.line '.', line_end = vim.fn.line '.' }) end, { desc = '[H]unk [R]eset' })
+      vim.keymap.set('n', '<leader>hs', function() stage_hunk { line_start = vim.fn.line '.', line_end = vim.fn.line '.' } end, { desc = '[H]unk [S]tage' })
+      vim.keymap.set(
+        'n',
+        '<leader>hr',
+        function() MiniDiff.do_hunks(0, 'reset', { line_start = vim.fn.line '.', line_end = vim.fn.line '.' }) end,
+        { desc = '[H]unk [R]eset' }
+      )
       vim.keymap.set('x', '<leader>hs', function()
         local start = vim.fn.line 'v'
         local finish = vim.fn.line '.'
-        if start > finish then start, finish = finish, start end
-        vim.cmd 'normal! '
-        stage_hunk({ line_start = start, line_end = finish })
+        if start > finish then
+          start, finish = finish, start
+        end
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'nx', false)
+        stage_hunk { line_start = start, line_end = finish }
       end, { desc = '[H]unk [S]tage selection' })
 
       -- Global diff overlay toggle
@@ -1079,17 +1086,13 @@ require('lazy').setup({
         local data = MiniDiff.get_buf_data(buf)
         if data == nil then return end
         -- data.overlay is a boolean (true/false)
-        if vim.g.minidiff_overlay_enabled ~= data.overlay then
-          MiniDiff.toggle_overlay(buf)
-        end
+        if vim.g.minidiff_overlay_enabled ~= data.overlay then MiniDiff.toggle_overlay(buf) end
       end
 
       vim.keymap.set('n', '<leader>ho', function()
         vim.g.minidiff_overlay_enabled = not vim.g.minidiff_overlay_enabled
         for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-          if vim.api.nvim_buf_is_loaded(buf) then
-            pcall(sync_overlay, buf)
-          end
+          if vim.api.nvim_buf_is_loaded(buf) then pcall(sync_overlay, buf) end
         end
       end, { desc = 'Toggle diff overlay (global)' })
 
@@ -1097,9 +1100,7 @@ require('lazy').setup({
       vim.api.nvim_create_autocmd('BufEnter', {
         callback = function(args)
           vim.defer_fn(function()
-            if vim.api.nvim_buf_is_valid(args.buf) then
-              pcall(sync_overlay, args.buf)
-            end
+            if vim.api.nvim_buf_is_valid(args.buf) then pcall(sync_overlay, args.buf) end
           end, 50)
         end,
       })
