@@ -279,13 +279,11 @@ end
 
 -- Alt+j/k to navigate git hunks in current file (wraps around)
 vim.keymap.set('n', '<M-j>', function()
-  local gs = require 'gitsigns'
-  gs.nav_hunk('next', { wrap = true })
+  MiniDiff.goto_hunk('next')
 end, { desc = 'Next git hunk' })
 
 vim.keymap.set('n', '<M-k>', function()
-  local gs = require 'gitsigns'
-  gs.nav_hunk('prev', { wrap = true })
+  MiniDiff.goto_hunk('prev')
 end, { desc = 'Prev git hunk' })
 
 -- Alt+h/l to navigate between modified files
@@ -398,33 +396,7 @@ require('lazy').setup({
   -- NOTE: Plugins can be added via a link or github org/name. To run setup automatically, use `opts = {}`
   { 'NMAC427/guess-indent.nvim', opts = {} },
 
-  -- Alternatively, use `config = function() ... end` for full control over the configuration.
-  -- If you prefer to call `setup` explicitly, use:
-  --    {
-  --        'lewis6991/gitsigns.nvim',
-  --        config = function()
-  --            require('gitsigns').setup({
-  --                -- Your gitsigns configuration here
-  --            })
-  --        end,
-  --    }
-  --
-  -- Here is a more advanced example where we pass configuration
-  -- options to `gitsigns.nvim`.
-  --
-  -- See `:help gitsigns` to understand what the configuration keys do
-  { -- Adds git related signs to the gutter, as well as utilities for managing changes
-    'lewis6991/gitsigns.nvim',
-    opts = {
-      signs = {
-        add = { text = '+' },
-        change = { text = '~' },
-        delete = { text = '_' },
-        topdelete = { text = '‾' },
-        changedelete = { text = '~' },
-      },
-    },
-  },
+  -- Git signs removed - using mini.diff instead (configured in mini.nvim section below)
 
   -- NOTE: Plugins can also be configured to run Lua code when they are loaded.
   --
@@ -994,7 +966,7 @@ require('lazy').setup({
       local float_term = Terminal:new { direction = 'float', hidden = true }
 
       -- Keymaps
-      vim.keymap.set({ 'n', 't' }, '<leader>ot', '<cmd>ToggleTerm direction=horizontal<CR>', { desc = 'Toggle terminal' })
+      vim.keymap.set('n', '<leader>ot', '<cmd>ToggleTerm direction=horizontal<CR>', { desc = 'Toggle terminal' })
       vim.keymap.set({ 'n', 't' }, '<C-\\>', function() float_term:toggle() end, { desc = 'Toggle float terminal' })
       vim.keymap.set('n', '<leader>on', function()
         local terms = require('toggleterm.terminal').get_all()
@@ -1027,12 +999,75 @@ require('lazy').setup({
       -- - sr)'  - [S]urround [R]eplace [)] [']
       require('mini.surround').setup()
 
-      -- Toggle inline diff overlay using git diff output as virtual text
+      -- mini.diff: Git hunk visualization and management
+      -- Overlay highlight groups: red for old/deleted, green for new/added
+      vim.api.nvim_set_hl(0, 'MiniDiffOverAdd', { bg = '#1a3a1a', fg = '#a6e3a1' })        -- Added lines: green
+      vim.api.nvim_set_hl(0, 'MiniDiffOverDelete', { bg = '#3a1a1a', fg = '#f38ba8' })     -- Deleted lines: red
+      vim.api.nvim_set_hl(0, 'MiniDiffOverChange', { bg = '#3a1a1a', fg = '#f38ba8' })     -- Changed ref text (old): red
+      vim.api.nvim_set_hl(0, 'MiniDiffOverChangeBuf', { bg = '#1a3a1a', fg = '#a6e3a1' })  -- Changed buf text (new): green
+      vim.api.nvim_set_hl(0, 'MiniDiffOverContext', { fg = '#6c7086' })                    -- Unchanged parts of ref line: dim
+      vim.api.nvim_set_hl(0, 'MiniDiffOverContextBuf', { fg = '#6c7086' })                 -- Unchanged parts of buf line: dim
+
+      require('mini.diff').setup {
+        view = {
+          style = 'sign',
+          signs = { add = '+', change = '~', delete = '_' },
+        },
+        mappings = {
+          apply = 'gh',  -- Stage hunks (operator: ghgh for current hunk, vipgh for paragraph)
+          reset = 'gH',  -- Reset hunks (operator: gHgH for current hunk)
+          textobject = 'gh', -- Hunk textobject (e.g. vgh, dgh)
+          goto_first = '[H',
+          goto_prev = '[h',
+          goto_next = ']h',
+          goto_last = ']H',
+        },
+        options = {
+          algorithm = 'histogram',
+          indent_heuristic = true,
+          linematch = 60,
+          wrap_goto = true, -- Wrap around when navigating hunks
+        },
+      }
+
+      -- Global diff overlay toggle
+      vim.g.minidiff_overlay_enabled = false
+
+      local function sync_overlay(buf)
+        if not vim.api.nvim_buf_is_valid(buf) or not vim.bo[buf].buflisted then return end
+        local data = MiniDiff.get_buf_data(buf)
+        if data == nil then return end
+        -- data.overlay is a boolean (true/false)
+        if vim.g.minidiff_overlay_enabled ~= data.overlay then
+          MiniDiff.toggle_overlay(buf)
+        end
+      end
+
       vim.keymap.set('n', '<leader>ho', function()
-        -- Use gitsigns preview_hunk_inline for all hunks
-        local gitsigns = require 'gitsigns'
-        gitsigns.toggle_deleted()
-      end, { desc = 'Toggle deleted lines overlay' })
+        vim.g.minidiff_overlay_enabled = not vim.g.minidiff_overlay_enabled
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_loaded(buf) then
+            pcall(sync_overlay, buf)
+          end
+        end
+      end, { desc = 'Toggle diff overlay (global)' })
+
+      -- Sync overlay state when entering any buffer
+      vim.api.nvim_create_autocmd('BufEnter', {
+        callback = function(args)
+          vim.defer_fn(function()
+            if vim.api.nvim_buf_is_valid(args.buf) then
+              pcall(sync_overlay, args.buf)
+            end
+          end, 50)
+        end,
+      })
+
+      -- Stage entire buffer (select all then apply)
+      vim.keymap.set('n', '<leader>hS', 'ggVGgh', { desc = 'Stage entire buffer', remap = true })
+
+      -- Reset entire buffer (select all then reset)
+      vim.keymap.set('n', '<leader>hR', 'ggVGgH', { desc = 'Reset entire buffer', remap = true })
 
       -- Simple and easy statusline.
       --  You could remove this setup call if you don't like it,
@@ -1155,7 +1190,7 @@ require('lazy').setup({
   -- require 'kickstart.plugins.indent_line',
   require 'kickstart.plugins.autopairs',
   require 'kickstart.plugins.neo-tree',
-  require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
+  -- require 'kickstart.plugins.gitsigns', -- disabled: using mini.diff instead
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
   --    This is the easiest way to modularize your config.
