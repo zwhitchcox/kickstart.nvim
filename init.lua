@@ -257,6 +257,10 @@ vim.keymap.set('n', '<M-,>', '<C-w>5<', { desc = 'Shrink window width' })
 vim.keymap.set('n', '<M-.>', '<C-w>5>', { desc = 'Grow window width' })
 vim.keymap.set('n', '<M-t>', '<C-w>+', { desc = 'Grow window height' })
 vim.keymap.set('n', '<M-s>', '<C-w>-', { desc = 'Shrink window height' })
+vim.keymap.set('t', '<M-,>', '<C-\\><C-n><C-w>5<i', { desc = 'Shrink window width' })
+vim.keymap.set('t', '<M-.>', '<C-\\><C-n><C-w>5>i', { desc = 'Grow window width' })
+vim.keymap.set('t', '<M-t>', '<C-\\><C-n><C-w>+i', { desc = 'Grow window height' })
+vim.keymap.set('t', '<M-s>', '<C-\\><C-n><C-w>-i', { desc = 'Shrink window height' })
 --
 -- Smart j/k - use visual lines when no count, actual lines with count
 vim.keymap.set('n', 'j', function() return vim.v.count == 0 and 'gj' or 'j' end, { expr = true, desc = 'Down (visual line if no count)' })
