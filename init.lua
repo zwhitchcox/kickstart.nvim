@@ -1061,13 +1061,8 @@ require('lazy').setup({
           error(err)
         end
       end
-      vim.keymap.set('n', '<leader>hs', function() stage_hunk { line_start = vim.fn.line '.', line_end = vim.fn.line '.' } end, { desc = '[H]unk [S]tage' })
-      vim.keymap.set(
-        'n',
-        '<leader>hr',
-        function() MiniDiff.do_hunks(0, 'reset', { line_start = vim.fn.line '.', line_end = vim.fn.line '.' }) end,
-        { desc = '[H]unk [R]eset' }
-      )
+      vim.keymap.set('n', '<leader>hs', function() stage_hunk() end, { desc = '[H]unk [S]tage' })
+      vim.keymap.set('n', '<leader>hr', function() MiniDiff.do_hunks(0, 'reset') end, { desc = '[H]unk [R]eset' })
       vim.keymap.set('x', '<leader>hs', function()
         local start = vim.fn.line 'v'
         local finish = vim.fn.line '.'
