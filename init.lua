@@ -261,6 +261,18 @@ vim.keymap.set('t', '<M-,>', '<C-\\><C-n><C-w>5<i', { desc = 'Shrink window widt
 vim.keymap.set('t', '<M-.>', '<C-\\><C-n><C-w>5>i', { desc = 'Grow window width' })
 vim.keymap.set('t', '<M-t>', '<C-\\><C-n><C-w>+i', { desc = 'Grow window height' })
 vim.keymap.set('t', '<M-s>', '<C-\\><C-n><C-w>-i', { desc = 'Shrink window height' })
+
+-- Toggle light/dark theme manually
+vim.keymap.set('n', '<leader>tl', function()
+  if vim.o.background == 'light' then
+    vim.o.background = 'dark'
+    vim.cmd.colorscheme 'tokyonight-night'
+  else
+    vim.o.background = 'light'
+    vim.cmd.colorscheme 'bluloco-light'
+  end
+end, { desc = 'Toggle light/dark theme' })
+
 --
 -- Smart j/k - use visual lines when no count, actual lines with count
 vim.keymap.set('n', 'j', function() return vim.v.count == 0 and 'gj' or 'j' end, { expr = true, desc = 'Down (visual line if no count)' })
@@ -954,6 +966,22 @@ require('lazy').setup({
       -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
       vim.cmd.colorscheme 'tokyonight-night'
     end,
+  },
+
+  { 'uloco/bluloco.nvim', lazy = true, dependencies = { 'rktjmp/lush.nvim' } },
+
+  { -- Automatically follow system light/dark mode
+    'f-person/auto-dark-mode.nvim',
+    opts = {
+      set_dark_mode = function()
+        vim.o.background = 'dark'
+        vim.cmd.colorscheme 'tokyonight-night'
+      end,
+      set_light_mode = function()
+        vim.o.background = 'light'
+        vim.cmd.colorscheme 'bluloco-light'
+      end,
+    },
   },
 
   -- Highlight todo, notes, etc in comments
