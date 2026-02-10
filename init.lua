@@ -1161,6 +1161,24 @@ require('lazy').setup({
     end,
   },
 
+  { -- Git diff viewer with support for untracked files
+    'sindrets/diffview.nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    cmd = { 'DiffviewOpen', 'DiffviewFileHistory' },
+    keys = {
+      { '<leader>hv', function()
+        local lib = require('diffview.lib')
+        if lib.get_current_view() then
+          vim.cmd('DiffviewClose')
+        else
+          vim.cmd('DiffviewOpen')
+        end
+      end, desc = 'Diffview: toggle' },
+      { '<leader>hh', '<cmd>DiffviewFileHistory %<CR>', desc = 'Diffview: file history' },
+      { '<leader>hH', '<cmd>DiffviewFileHistory<CR>', desc = 'Diffview: branch history' },
+    },
+  },
+
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
     config = function()
