@@ -294,11 +294,11 @@ local function goto_hunk_or_file(direction)
     for i, file in ipairs(files) do
       if file == current then
         local target = direction == 'next' and (files[i + 1] or files[1]) or (files[i - 1] or files[#files])
-        vim.cmd.edit(target)
+        vim.cmd.edit(vim.fn.fnameescape(target))
         return
       end
     end
-    vim.cmd.edit(direction == 'next' and files[1] or files[#files])
+    vim.cmd.edit(vim.fn.fnameescape(direction == 'next' and files[1] or files[#files]))
   end
 end
 
@@ -316,11 +316,11 @@ vim.keymap.set('n', '<M-h>', function()
   for i, file in ipairs(files) do
     if file == current then
       local prev = files[i - 1] or files[#files]
-      vim.cmd.edit(prev)
+      vim.cmd.edit(vim.fn.fnameescape(prev))
       return
     end
   end
-  vim.cmd.edit(files[#files])
+  vim.cmd.edit(vim.fn.fnameescape(files[#files]))
 end, { desc = 'Prev modified file' })
 
 vim.keymap.set('n', '<M-l>', function()
@@ -333,11 +333,11 @@ vim.keymap.set('n', '<M-l>', function()
   for i, file in ipairs(files) do
     if file == current then
       local next_file = files[i + 1] or files[1]
-      vim.cmd.edit(next_file)
+      vim.cmd.edit(vim.fn.fnameescape(next_file))
       return
     end
   end
-  vim.cmd.edit(files[1])
+  vim.cmd.edit(vim.fn.fnameescape(files[1]))
 end, { desc = 'Next modified file' })
 
 -- Track last editor window and jump back to it with Ctrl+;
