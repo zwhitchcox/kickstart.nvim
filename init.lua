@@ -993,10 +993,15 @@ require('lazy').setup({
         vim.cmd(next_id .. 'ToggleTerm direction=horizontal')
       end, { desc = 'New terminal' })
 
-      -- Navigate between terminals
+      -- Navigate between terminals (normal mode)
       vim.keymap.set('n', '<leader>o1', '<cmd>1ToggleTerm<CR>', { desc = 'Terminal 1' })
       vim.keymap.set('n', '<leader>o2', '<cmd>2ToggleTerm<CR>', { desc = 'Terminal 2' })
       vim.keymap.set('n', '<leader>o3', '<cmd>3ToggleTerm<CR>', { desc = 'Terminal 3' })
+
+      -- Quick terminal switching from anywhere (Alt+1/2/3)
+      vim.keymap.set({ 'n', 't' }, '<M-1>', '<C-\\><C-n><cmd>1ToggleTerm<CR>', { desc = 'Terminal 1' })
+      vim.keymap.set({ 'n', 't' }, '<M-2>', '<C-\\><C-n><cmd>2ToggleTerm<CR>', { desc = 'Terminal 2' })
+      vim.keymap.set({ 'n', 't' }, '<M-3>', '<C-\\><C-n><cmd>3ToggleTerm<CR>', { desc = 'Terminal 3' })
     end,
   },
 
