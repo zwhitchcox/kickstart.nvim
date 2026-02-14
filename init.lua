@@ -290,7 +290,7 @@ local function get_modified_files()
   local cwd = vim.fn.getcwd() .. '/'
   for file in result:gmatch '[^\n]+' do
     local full = cwd .. file
-    if not seen[full] then
+    if not seen[full] and vim.fn.filereadable(full) == 1 then
       seen[full] = true
       table.insert(files, full)
     end
@@ -431,7 +431,84 @@ require('lazy').setup({
   -- NOTE: Plugins can be added via a link or github org/name. To run setup automatically, use `opts = {}`
   { 'NMAC427/guess-indent.nvim', opts = {} },
 
-  -- Git signs removed - using mini.diff instead (configured in mini.nvim section below)
+  -- Gitsigns (temporarily replacing mini.diff)
+  {
+    'lewis6991/gitsigns.nvim',
+    event = { 'BufReadPre', 'BufNewFile' },
+    opts = {
+      attach_to_untracked = true,
+      signcolumn = true,
+      word_diff = true,
+      show_deleted = true,
+      signs_staged_enable = true,
+      signs = {
+        add = { text = '+' },
+        change = { text = '~' },
+        delete = { text = '_' },
+        topdelete = { text = '‾' },
+        changedelete = { text = '~' },
+      },
+    },
+    config = function(_, opts)
+      require('gitsigns').setup(opts)
+      local gs = require 'gitsigns'
+
+      -- Navigation: use ]c/[c in diff mode, otherwise navigate hunks
+      vim.keymap.set('n', ']c', function()
+        if vim.wo.diff then
+          vim.cmd.normal { ']c', bang = true }
+        else
+          gs.nav_hunk 'next'
+        end
+      end, { desc = 'Next hunk / diff change' })
+      vim.keymap.set('n', '[c', function()
+        if vim.wo.diff then
+          vim.cmd.normal { '[c', bang = true }
+        else
+          gs.nav_hunk 'prev'
+        end
+      end, { desc = 'Prev hunk / diff change' })
+      vim.keymap.set('n', '<M-j>', function() gs.nav_hunk 'next' end, { desc = 'Next git hunk' })
+      vim.keymap.set('n', '<M-k>', function() gs.nav_hunk 'prev' end, { desc = 'Prev git hunk' })
+
+      -- Stage / reset hunks
+      vim.keymap.set('n', '<leader>hs', gs.stage_hunk, { desc = '[H]unk [S]tage' })
+      vim.keymap.set('v', '<leader>hs', function() gs.stage_hunk { vim.fn.line '.', vim.fn.line 'v' } end, { desc = '[H]unk [S]tage selection' })
+      vim.keymap.set('n', '<leader>hr', gs.reset_hunk, { desc = '[H]unk [R]eset' })
+      vim.keymap.set('v', '<leader>hr', function() gs.reset_hunk { vim.fn.line '.', vim.fn.line 'v' } end, { desc = '[H]unk [R]eset selection' })
+
+      -- Stage / reset buffer
+      vim.keymap.set('n', '<leader>hS', gs.stage_buffer, { desc = '[H]unk [S]tage buffer' })
+      vim.keymap.set('n', '<leader>hR', gs.reset_buffer, { desc = '[H]unk [R]eset buffer' })
+
+      -- Unstage
+      vim.keymap.set('n', '<leader>hu', gs.undo_stage_hunk, { desc = '[H]unk [U]ndo stage' })
+      vim.keymap.set('n', '<leader>hU', gs.reset_buffer_index, { desc = '[H]unk [U]nstage file' })
+
+      -- Preview
+      vim.keymap.set('n', '<leader>hp', gs.preview_hunk, { desc = '[H]unk [P]review (float)' })
+      vim.keymap.set('n', '<leader>hi', gs.preview_hunk_inline, { desc = '[H]unk [P]review inline' })
+
+      -- Blame
+      vim.keymap.set('n', '<leader>hb', function() gs.blame_line { full = true } end, { desc = '[H]unk [B]lame line' })
+      vim.keymap.set('n', '<leader>tb', gs.toggle_current_line_blame, { desc = '[T]oggle line [B]lame' })
+
+      -- Diff
+      vim.keymap.set('n', '<leader>hd', gs.diffthis, { desc = '[H]unk [D]iff this' })
+      vim.keymap.set('n', '<leader>hD', function() gs.diffthis '~' end, { desc = '[H]unk [D]iff against ~' })
+
+      -- Quickfix
+      vim.keymap.set('n', '<leader>hq', gs.setqflist, { desc = '[H]unk [Q]uickfix' })
+      vim.keymap.set('n', '<leader>hQ', function() gs.setqflist 'all' end, { desc = '[H]unk [Q]uickfix all' })
+
+      -- Toggles
+      vim.keymap.set('n', '<leader>tw', gs.toggle_word_diff, { desc = '[T]oggle [W]ord diff' })
+      vim.keymap.set('n', '<leader>td', gs.toggle_deleted, { desc = '[T]oggle [D]eleted lines' })
+
+      -- Text object: "inner hunk" (e.g. vih, dih, cih)
+      vim.keymap.set({ 'o', 'x' }, 'ih', gs.select_hunk, { desc = 'inner hunk' })
+    end,
+  },
 
   -- NOTE: Plugins can also be configured to run Lua code when they are loaded.
   --
@@ -629,6 +706,23 @@ require('lazy').setup({
     end,
   },
 
+  { -- TypeScript/JavaScript LSP
+    'pmizio/typescript-tools.nvim',
+    dependencies = { 'nvim-lua/plenary.nvim', 'neovim/nvim-lspconfig' },
+    ft = { 'typescript', 'typescriptreact', 'javascript', 'javascriptreact' },
+    opts = {
+      settings = {
+        tsserver_file_preferences = {
+          includeCompletionsForModuleExports = true,
+          includeInlayParameterNameHints = 'all',
+          includeInlayVariableTypeHints = true,
+          includeInlayFunctionLikeReturnTypeHints = true,
+        },
+        complete_function_calls = true,
+      },
+    },
+  },
+
   -- LSP Plugins
   {
     -- Main LSP Configuration
@@ -639,7 +733,7 @@ require('lazy').setup({
       -- NOTE: `opts = {}` is the same as calling `require('mason').setup({})`
       { 'mason-org/mason.nvim', opts = {} },
       'WhoIsSethDaniel/mason-tool-installer.nvim',
-      { 'mason-org/mason-lspconfig.nvim', opts = {} },
+      { 'mason-org/mason-lspconfig.nvim' },
 
       -- Useful status updates for LSP.
       { 'j-hui/fidget.nvim', opts = {} },
@@ -737,6 +831,14 @@ require('lazy').setup({
           -- This may be unwanted, since they displace some of your code
           if client and client:supports_method('textDocument/inlayHint', event.buf) then
             map('<leader>th', function() vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf }) end, '[T]oggle Inlay [H]ints')
+          end
+
+          -- ESLint: auto-fix on save
+          if client and client.name == 'eslint' then
+            vim.api.nvim_create_autocmd('BufWritePre', {
+              buffer = event.buf,
+              callback = function() pcall(vim.cmd, 'LspEslintFixAll') end,
+            })
           end
         end,
       })
@@ -844,11 +946,14 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
-        -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
-        --
-        -- You can use 'stop_after_first' to run the first available formatter from the list
-        -- javascript = { "prettierd", "prettier", stop_after_first = true },
+        javascript = { 'prettierd', 'prettier', stop_after_first = true },
+        javascriptreact = { 'prettierd', 'prettier', stop_after_first = true },
+        typescript = { 'prettierd', 'prettier', stop_after_first = true },
+        typescriptreact = { 'prettierd', 'prettier', stop_after_first = true },
+        json = { 'prettierd', 'prettier', stop_after_first = true },
+        css = { 'prettierd', 'prettier', stop_after_first = true },
+        html = { 'prettierd', 'prettier', stop_after_first = true },
+        markdown = { 'prettierd', 'prettier', stop_after_first = true },
       },
     },
   },
@@ -1055,7 +1160,8 @@ require('lazy').setup({
       -- - sr)'  - [S]urround [R]eplace [)] [']
       require('mini.surround').setup()
 
-      -- mini.diff: Git hunk visualization and management
+      -- mini.diff: TEMPORARILY DISABLED — using gitsigns instead
+      --[[ mini.diff block disabled
       -- Overlay highlight groups: red for old/deleted, green for new/added
       vim.api.nvim_set_hl(0, 'MiniDiffOverAdd', { bg = '#1a3a1a', fg = '#a6e3a1' }) -- Added lines: green
       vim.api.nvim_set_hl(0, 'MiniDiffOverDelete', { bg = '#3a1a1a', fg = '#f38ba8' }) -- Deleted lines: red
@@ -1064,7 +1170,109 @@ require('lazy').setup({
       vim.api.nvim_set_hl(0, 'MiniDiffOverContext', { fg = '#6c7086' }) -- Unchanged parts of ref line: dim
       vim.api.nvim_set_hl(0, 'MiniDiffOverContextBuf', { fg = '#6c7086' }) -- Unchanged parts of buf line: dim
 
-      require('mini.diff').setup {
+      -- Untracked/intent-to-add file support for MiniDiff (modeled after gitsigns).
+      --
+      -- MiniDiff's git source doesn't handle untracked or intent-to-add files:
+      --   - `git show :0:./file` returns empty → reference text is cleared → no hunks
+      --   - `set_ref_text('')` appends '\n' → vim.diff produces a broken "change" hunk
+      --   - The resulting patch fails against the empty blob in the index
+      --
+      -- Like gitsigns, we:
+      --   1. Auto-run `git add --intent-to-add` for untracked files
+      --   2. Set reference text to '' so all lines show as added
+      --   3. Generate a correct pure-add patch when staging
+      local minidiff = require 'mini.diff'
+
+      --- Get the git index state of a buffer's file.
+      --- Returns 'tracked', 'intent_to_add', 'untracked', or nil.
+      local function git_file_status(buf_id)
+        local path = vim.api.nvim_buf_get_name(buf_id)
+        if path == '' then return nil end
+        local dir = vim.fn.fnamemodify(path, ':h')
+        local name = vim.fn.fnamemodify(path, ':t')
+        local ls_out = vim.trim(vim.fn.system { 'git', '-C', dir, 'ls-files', '-s', '--', name })
+        if ls_out == '' then
+          -- Not in index at all. Check if inside a git repo.
+          vim.fn.system { 'git', '-C', dir, 'rev-parse', '--git-dir' }
+          return vim.v.shell_error == 0 and 'untracked' or nil
+        end
+        -- e69de29 is the SHA of the empty blob — indicates intent-to-add
+        if ls_out:match '^100644 e69de29' then return 'intent_to_add' end
+        return 'tracked'
+      end
+
+      --- Ensure file is in the git index (like gitsigns' ensure_file_in_index).
+      --- For untracked files, runs `git add --intent-to-add`.
+      --- Returns true if the file is now in the index (tracked or intent-to-add).
+      local function ensure_file_in_index(buf_id)
+        local status = git_file_status(buf_id)
+        if status == 'tracked' or status == 'intent_to_add' then return true end
+        if status ~= 'untracked' then return false end
+        local path = vim.api.nvim_buf_get_name(buf_id)
+        local dir = vim.fn.fnamemodify(path, ':h')
+        local name = vim.fn.fnamemodify(path, ':t')
+        vim.fn.system { 'git', '-C', dir, 'add', '--intent-to-add', '--', name }
+        return vim.v.shell_error == 0
+      end
+
+      --- Set up MiniDiff reference text for untracked/intent-to-add files.
+      --- Returns true if ref text was set.
+      local function setup_ref_for_new_file(buf_id)
+        local status = git_file_status(buf_id)
+        if status == 'untracked' then
+          if not ensure_file_in_index(buf_id) then return false end
+        elseif status ~= 'intent_to_add' then
+          return false
+        end
+        pcall(MiniDiff.set_ref_text, buf_id, '')
+        return true
+      end
+
+      local git_source = minidiff.gen_source.git()
+      local orig_apply = git_source.apply_hunks
+      git_source.apply_hunks = function(buf_id, hunks)
+        local status = git_file_status(buf_id)
+
+        -- For normal tracked files, use the original apply
+        if status == 'tracked' then return orig_apply(buf_id, hunks) end
+
+        -- For untracked files, ensure they're in the index first
+        if status == 'untracked' then
+          if not ensure_file_in_index(buf_id) then return end
+        end
+
+        -- Intent-to-add (empty blob): build a pure-add patch.
+        -- MiniDiff's patch would be broken (tries to delete a phantom empty line).
+        local path = vim.api.nvim_buf_get_name(buf_id)
+        local dir = vim.fn.fnamemodify(path, ':h')
+        local name = vim.fn.fnamemodify(path, ':t')
+
+        local buf_lines = vim.api.nvim_buf_get_lines(buf_id, 0, -1, false)
+        local staged_lines = {}
+        for _, h in ipairs(hunks) do
+          for i = h.buf_start, h.buf_start + h.buf_count - 1 do
+            table.insert(staged_lines, buf_lines[i])
+          end
+        end
+        if #staged_lines == 0 then return end
+
+        local rel_path = vim.trim(vim.fn.system { 'git', '-C', dir, 'ls-files', '--full-name', '--', name })
+        if rel_path == '' then return end
+
+        local patch = string.format('diff --git a/%s b/%s\n', rel_path, rel_path)
+          .. 'index 000000..000000 100644\n'
+          .. string.format('--- a/%s\n', rel_path)
+          .. string.format('+++ b/%s\n', rel_path)
+          .. string.format('@@ -0,0 +1,%d @@\n', #staged_lines)
+        for _, l in ipairs(staged_lines) do
+          patch = patch .. '+' .. l .. '\n'
+        end
+
+        vim.fn.system({ 'git', '-C', dir, 'apply', '--whitespace=nowarn', '--cached', '--unidiff-zero', '-' }, patch)
+      end
+
+      minidiff.setup {
+        source = git_source,
         view = {
           style = 'sign',
           signs = { add = '+', change = '~', delete = '_' },
@@ -1086,20 +1294,54 @@ require('lazy').setup({
         },
       }
 
-      -- Stage/reset hunk under cursor (falls back to `git add` for untracked files)
+      -- Auto-detect untracked/intent-to-add files and set reference text so
+      -- hunks are visible. The git source clears ref for these files because
+      -- `git show :0:./file` returns empty. We detect this and fix it.
+      vim.api.nvim_create_autocmd('BufEnter', {
+        callback = function(args)
+          local buf = args.buf
+          -- Delay to let MiniDiff's git source finish its async ref text fetch
+          vim.defer_fn(function()
+            if not vim.api.nvim_buf_is_valid(buf) then return end
+            local data = MiniDiff.get_buf_data(buf)
+            if not data or data.ref_text then return end
+            setup_ref_for_new_file(buf)
+          end, 500)
+        end,
+      })
+
+      --- Stage hunks, auto-handling untracked/intent-to-add files.
       local function stage_hunk(opts)
         local ok, err = pcall(MiniDiff.do_hunks, 0, 'apply', opts)
-        if not ok and type(err) == 'string' and err:find 'no reference text' then
-          -- Untracked file: stage the whole file
-          local file = vim.fn.expand '%'
-          vim.fn.system('git add -- ' .. vim.fn.shellescape(file))
-          vim.notify('Staged untracked file: ' .. file, vim.log.levels.INFO)
-        elseif not ok then
+        if ok then return end
+        if type(err) == 'string' and err:find 'no reference text' then
+          -- Auto-detect and set up new files, then retry
+          if setup_ref_for_new_file(0) then
+            vim.defer_fn(function()
+              local ok2, err2 = pcall(MiniDiff.do_hunks, 0, 'apply', opts)
+              if not ok2 and type(err2) == 'string' and err2:find 'no hunks' then
+                vim.notify('No hunks to stage', vim.log.levels.INFO)
+              elseif not ok2 then
+                vim.notify('Stage failed: ' .. tostring(err2), vim.log.levels.WARN)
+              end
+            end, 100)
+          else
+            vim.notify('Cannot stage: file is not in a git repository', vim.log.levels.WARN)
+          end
+        elseif type(err) == 'string' and err:find 'no hunks' then
+          vim.notify('No hunks to stage', vim.log.levels.INFO)
+        else
           error(err)
         end
       end
-      vim.keymap.set('n', '<leader>hs', function() stage_hunk() end, { desc = '[H]unk [S]tage' })
-      vim.keymap.set('n', '<leader>hr', function() MiniDiff.do_hunks(0, 'reset') end, { desc = '[H]unk [R]eset' })
+      vim.keymap.set('n', '<leader>hs', function()
+        local line = vim.fn.line '.'
+        stage_hunk { line_start = line, line_end = line }
+      end, { desc = '[H]unk [S]tage' })
+      vim.keymap.set('n', '<leader>hr', function()
+        -- gHgh = reset operator (gH) on hunk textobject (gh) = reset hunk under cursor
+        pcall(vim.cmd, 'normal gHgh')
+      end, { desc = '[H]unk [R]eset' })
       vim.keymap.set('x', '<leader>hs', function()
         local start = vim.fn.line 'v'
         local finish = vim.fn.line '.'
@@ -1109,6 +1351,209 @@ require('lazy').setup({
         vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'nx', false)
         stage_hunk { line_start = start, line_end = finish }
       end, { desc = '[H]unk [S]tage selection' })
+      -- Unstage hunks using git apply --cached --reverse on the staged diff.
+      -- For new files (--- /dev/null), we rewrite the header to avoid creating
+      -- a bogus dev/null file when reversing the patch.
+      local function unstage_staged_hunk(line_start, line_end)
+        local file = vim.fn.expand '%:.'
+        local diff = vim.fn.system { 'git', 'diff', '--cached', '--', file }
+        if diff == '' then
+          vim.notify('Nothing staged for ' .. file, vim.log.levels.INFO)
+          return
+        end
+
+        local status = vim.trim(vim.fn.system { 'git', 'diff', '--cached', '--name-status', '--', file })
+        local is_new_file = status:match '^A' ~= nil
+
+        if is_new_file then
+          -- New file: the staged diff is one hunk with all +lines. To partially
+          -- unstage, build a patch with only the selected lines as +lines (with
+          -- surrounding context), then apply it in reverse.
+          local file_path
+          for line in diff:gmatch '([^\n]*)\n?' do
+            -- Handle both unquoted (+++ b/path) and quoted (+++ "b/path") formats
+            file_path = line:match '^%+%+%+ b/(.*)'
+              or (line:match '^%+%+%+ "b/(.*)"%s*$' or ''):gsub('\\(.)', '%1') -- unquote
+            if file_path ~= '' then break end
+            file_path = nil
+          end
+          if not file_path then file_path = file end
+
+          -- Collect all +lines with their 1-based index-side line numbers
+          local index_lines = {}
+          local in_hunk = false
+          local idx = 0
+          for line in diff:gmatch '([^\n]*)\n?' do
+            if line:match '^@@' then
+              in_hunk = true
+            elseif in_hunk and line:match '^%+' then
+              idx = idx + 1
+              table.insert(index_lines, { num = idx, text = line:sub(2) })
+            end
+          end
+
+          -- Find which index lines fall in the cursor/selection range
+          local to_unstage = {}
+          for _, il in ipairs(index_lines) do
+            if il.num >= line_start and il.num <= line_end then
+              to_unstage[il.num] = true
+            end
+          end
+
+          if vim.tbl_isempty(to_unstage) then
+            vim.notify('No staged hunks at cursor', vim.log.levels.INFO)
+            return
+          end
+
+          -- Build patch body: +lines for lines to unstage, context around them
+          local patch_body = {}
+          local old_count = 0
+          local new_count = 0
+          local first_line = nil
+          for _, il in ipairs(index_lines) do
+            if to_unstage[il.num] then
+              table.insert(patch_body, '+' .. il.text)
+              new_count = new_count + 1
+              if not first_line then first_line = il.num end
+            elseif il.num >= (line_start - 3) and il.num <= (line_end + 3) then
+              table.insert(patch_body, ' ' .. il.text)
+              old_count = old_count + 1
+              new_count = new_count + 1
+              if not first_line then first_line = il.num end
+            end
+          end
+
+          if #patch_body == 0 then
+            vim.notify('No staged hunks at cursor', vim.log.levels.INFO)
+            return
+          end
+
+          local hdr = string.format('@@ -%d,%d +%d,%d @@', first_line, old_count, first_line, new_count)
+          local patch = table.concat({
+            string.format('diff --git a/%s b/%s', file_path, file_path),
+            'index 000000..000000 100644',
+            '--- a/' .. file_path,
+            '+++ b/' .. file_path,
+            hdr,
+            unpack(patch_body),
+          }, '\n') .. '\n'
+          local result = vim.fn.system({ 'git', 'apply', '--cached', '--reverse', '-' }, patch)
+          if vim.v.shell_error ~= 0 then
+            vim.notify('Unstage failed: ' .. vim.trim(result), vim.log.levels.ERROR)
+            return
+          end
+        else
+          -- Tracked file: parse hunks and select those overlapping the cursor/selection
+          local header_lines = {}
+          local selected_hunks = {}
+          local current_hunk = nil
+          local seen_hunk = false
+
+          for line in diff:gmatch '([^\n]*)\n?' do
+            if not seen_hunk and not line:match '^@@' then
+              table.insert(header_lines, line)
+            elseif line:match '^@@' then
+              seen_hunk = true
+              if current_hunk and current_hunk.selected then
+                table.insert(selected_hunks, current_hunk)
+              end
+              local old_start, old_count = line:match '%-(%d+),?(%d*)'
+              local new_start, new_count = line:match '%+(%d+),?(%d*)'
+              old_start = tonumber(old_start)
+              old_count = tonumber(old_count) or 1
+              new_start = tonumber(new_start)
+              new_count = tonumber(new_count) or 1
+              local old_end = old_start + math.max(old_count, 1) - 1
+              local new_end = new_start + math.max(new_count, 1) - 1
+              current_hunk = {
+                header = line,
+                lines = {},
+                selected = (old_end >= line_start and old_start <= line_end)
+                  or (new_end >= line_start and new_start <= line_end),
+              }
+            elseif current_hunk then
+              table.insert(current_hunk.lines, line)
+            end
+          end
+          if current_hunk and current_hunk.selected then
+            table.insert(selected_hunks, current_hunk)
+          end
+
+          if #selected_hunks == 0 then
+            vim.notify('No staged hunks at cursor', vim.log.levels.INFO)
+            return
+          end
+
+          local patch_lines = {}
+          for _, h in ipairs(header_lines) do
+            table.insert(patch_lines, h)
+          end
+          for _, hunk in ipairs(selected_hunks) do
+            table.insert(patch_lines, hunk.header)
+            for _, l in ipairs(hunk.lines) do
+              table.insert(patch_lines, l)
+            end
+          end
+
+          local patch = table.concat(patch_lines, '\n') .. '\n'
+          local result = vim.fn.system({ 'git', 'apply', '--cached', '--reverse', '-' }, patch)
+          if vim.v.shell_error ~= 0 then
+            vim.notify('Unstage failed: ' .. vim.trim(result), vim.log.levels.ERROR)
+            return
+          end
+        end -- if is_new_file
+
+        vim.notify('Unstaged hunk in ' .. file, vim.log.levels.INFO)
+        local buf = vim.api.nvim_get_current_buf()
+        pcall(MiniDiff.disable, buf)
+        vim.defer_fn(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          pcall(MiniDiff.enable, buf)
+          -- After source settles, force ref from the updated index
+          vim.defer_fn(function()
+            if not vim.api.nvim_buf_is_valid(buf) then return end
+            local ref = vim.fn.system { 'git', 'show', ':' .. file }
+            if vim.v.shell_error ~= 0 then ref = '' end
+            pcall(MiniDiff.set_ref_text, buf, ref)
+          end, 300)
+        end, 100)
+      end
+
+      -- Normal mode: unstage hunk under cursor
+      vim.keymap.set('n', '<leader>hu', function()
+        local line = vim.fn.line '.'
+        unstage_staged_hunk(line, line)
+      end, { desc = '[H]unk [U]nstage' })
+
+      -- Unstage entire file
+      vim.keymap.set('n', '<leader>hU', function()
+        local buf = vim.api.nvim_get_current_buf()
+        local file = vim.fn.expand '%:.'
+        vim.fn.system { 'git', 'cat-file', '-e', 'HEAD:' .. file }
+        if vim.v.shell_error ~= 0 then
+          vim.fn.system { 'git', 'rm', '--cached', '-f', '--', file }
+          vim.fn.system { 'git', 'add', '-N', '--', file }
+        else
+          vim.fn.system { 'git', 'reset', 'HEAD', '--', file }
+        end
+        vim.notify('Unstaged entire file: ' .. file, vim.log.levels.INFO)
+        pcall(MiniDiff.disable, buf)
+        vim.defer_fn(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          pcall(MiniDiff.enable, buf)
+        end, 100)
+      end, { desc = '[H]unk [U]nstage file' })
+
+      -- Visual mode: unstage hunks overlapping selection
+      vim.keymap.set('x', '<leader>hu', function()
+        local start = vim.fn.line 'v'
+        local finish = vim.fn.line '.'
+        if start > finish then
+          start, finish = finish, start
+        end
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'nx', false)
+        unstage_staged_hunk(start, finish)
+      end, { desc = '[H]unk [U]nstage selection' })
 
       -- Global diff overlay toggle
       vim.g.minidiff_overlay_enabled = false
@@ -1137,11 +1582,29 @@ require('lazy').setup({
         end,
       })
 
+      -- Track untracked file (intent to add) so hunks can be staged
+      vim.keymap.set('n', '<leader>hN', function()
+        local buf = vim.api.nvim_get_current_buf()
+        local status = git_file_status(buf)
+        if status == 'tracked' or status == 'intent_to_add' then
+          vim.notify(vim.fn.expand '%' .. ' is already tracked', vim.log.levels.INFO)
+          return
+        end
+        if not ensure_file_in_index(buf) then
+          vim.notify('Failed to track file', vim.log.levels.ERROR)
+          return
+        end
+        setup_ref_for_new_file(buf)
+        vim.notify('Tracking ' .. vim.fn.expand '%', vim.log.levels.INFO)
+      end, { desc = 'Track file (git add -N)' })
+
       -- Stage entire buffer (select all then apply)
       vim.keymap.set('n', '<leader>hS', 'ggVGgh', { desc = 'Stage entire buffer', remap = true })
 
       -- Reset entire buffer (select all then reset)
       vim.keymap.set('n', '<leader>hR', 'ggVGgH', { desc = 'Reset entire buffer', remap = true })
+      --]]
+      -- end mini.diff block disabled
 
       -- Simple and easy statusline.
       --  You could remove this setup call if you don't like it,
@@ -1166,14 +1629,18 @@ require('lazy').setup({
     dependencies = { 'nvim-tree/nvim-web-devicons' },
     cmd = { 'DiffviewOpen', 'DiffviewFileHistory' },
     keys = {
-      { '<leader>hv', function()
-        local lib = require('diffview.lib')
-        if lib.get_current_view() then
-          vim.cmd('DiffviewClose')
-        else
-          vim.cmd('DiffviewOpen')
-        end
-      end, desc = 'Diffview: toggle' },
+      {
+        '<leader>hv',
+        function()
+          local lib = require 'diffview.lib'
+          if lib.get_current_view() then
+            vim.cmd 'DiffviewClose'
+          else
+            vim.cmd 'DiffviewOpen'
+          end
+        end,
+        desc = 'Diffview: toggle',
+      },
       { '<leader>hh', '<cmd>DiffviewFileHistory %<CR>', desc = 'Diffview: file history' },
       { '<leader>hH', '<cmd>DiffviewFileHistory<CR>', desc = 'Diffview: branch history' },
     },
