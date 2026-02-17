@@ -447,6 +447,7 @@ require('lazy').setup({
         delete = { text = '_' },
         topdelete = { text = '‾' },
         changedelete = { text = '~' },
+        untracked = { text = '+' },
       },
     },
     config = function(_, opts)
@@ -1130,10 +1131,17 @@ require('lazy').setup({
         vim.cmd(next_id .. 'ToggleTerm direction=horizontal')
       end, { desc = 'New terminal' })
 
-      -- Navigate between terminals (normal mode)
+      -- Navigate between terminals (normal mode + terminal mode, but not in opencode)
       vim.keymap.set('n', '<leader>o1', '<cmd>1ToggleTerm<CR>', { desc = 'Terminal 1' })
       vim.keymap.set('n', '<leader>o2', '<cmd>2ToggleTerm<CR>', { desc = 'Terminal 2' })
       vim.keymap.set('n', '<leader>o3', '<cmd>3ToggleTerm<CR>', { desc = 'Terminal 3' })
+      for i = 1, 3 do
+        vim.keymap.set('t', '<leader>o' .. i, function()
+          if vim.api.nvim_buf_get_name(0):find 'opencode' then return end
+          vim.cmd('stopinsert')
+          vim.cmd(i .. 'ToggleTerm')
+        end, { desc = 'Terminal ' .. i })
+      end
 
       -- Quick terminal switching from anywhere (Alt+1/2/3)
       vim.keymap.set({ 'n', 't' }, '<M-1>', '<C-\\><C-n><cmd>1ToggleTerm<CR>', { desc = 'Terminal 1' })
