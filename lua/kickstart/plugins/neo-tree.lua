@@ -33,12 +33,18 @@ return {
           ['s'] = 'open_split', -- Open in horizontal split
           ['u'] = 'navigate_up', -- Go up one directory
           ['C'] = 'set_root', -- Set folder as root
+          ['O'] = function(state)
+            local node = state.tree:get_node()
+            local path = node:get_id()
+            vim.fn.system { 'open', '-R', path }
+          end, -- Reveal in Finder
         },
       },
     },
     window = {
       width = 30,
       position = 'left',
+      auto_resize = false,
     },
   },
 }

@@ -403,6 +403,16 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   callback = function() vim.hl.on_yank() end,
 })
 
+-- Auto-reload files changed by external processes (e.g. OpenCode)
+vim.o.autoread = true
+vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold', 'TermLeave' }, {
+  desc = 'Check for external file changes',
+  group = vim.api.nvim_create_augroup('auto-checktime', { clear = true }),
+  callback = function()
+    if vim.fn.getcmdwintype() == '' then vim.cmd 'checktime' end
+  end,
+})
+
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
@@ -469,8 +479,8 @@ require('lazy').setup({
           gs.nav_hunk 'prev'
         end
       end, { desc = 'Prev hunk / diff change' })
-      vim.keymap.set('n', '<M-j>', function() gs.nav_hunk 'next' end, { desc = 'Next git hunk' })
-      vim.keymap.set('n', '<M-k>', function() gs.nav_hunk 'prev' end, { desc = 'Prev git hunk' })
+      vim.keymap.set('n', '<M-j>', function() pcall(gs.nav_hunk, 'next') end, { desc = 'Next git hunk' })
+      vim.keymap.set('n', '<M-k>', function() pcall(gs.nav_hunk, 'prev') end, { desc = 'Prev git hunk' })
 
       -- Stage / reset hunks
       vim.keymap.set('n', '<leader>hs', gs.stage_hunk, { desc = '[H]unk [S]tage' })
@@ -877,6 +887,7 @@ require('lazy').setup({
       vim.list_extend(ensure_installed, {
         'lua_ls', -- Lua Language server
         'stylua', -- Used to format Lua code
+        'prisma-language-server', -- Prisma LSP
         -- You can add other tools here that you want Mason to install
       })
 
@@ -914,6 +925,12 @@ require('lazy').setup({
         },
       })
       vim.lsp.enable 'lua_ls'
+
+      -- Prisma LSP
+      vim.lsp.config('prismals', {
+        capabilities = capabilities,
+      })
+      vim.lsp.enable 'prismals'
     end,
   },
 
@@ -1138,7 +1155,7 @@ require('lazy').setup({
       for i = 1, 3 do
         vim.keymap.set('t', '<leader>o' .. i, function()
           if vim.api.nvim_buf_get_name(0):find 'opencode' then return end
-          vim.cmd('stopinsert')
+          vim.cmd 'stopinsert'
           vim.cmd(i .. 'ToggleTerm')
         end, { desc = 'Terminal ' .. i })
       end
@@ -1654,14 +1671,43 @@ require('lazy').setup({
     },
   },
 
+  { -- Sticky scroll: pin function/class headers at top of window
+    'nvim-treesitter/nvim-treesitter-context',
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+    event = 'BufReadPost',
+    opts = {
+      mode = 'topline',
+    },
+  },
+
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
     config = function()
-      local filetypes = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+      local filetypes = {
+        'bash',
+        'c',
+        'css',
+        'diff',
+        'html',
+        'javascript',
+        'json',
+        'jsonc',
+        'lua',
+        'luadoc',
+        'markdown',
+        'markdown_inline',
+        'prisma',
+        'query',
+        'tsx',
+        'typescript',
+        'vim',
+        'vimdoc',
+        'yaml',
+      }
       require('nvim-treesitter').install(filetypes)
       vim.api.nvim_create_autocmd('FileType', {
-        pattern = filetypes,
-        callback = function() vim.treesitter.start() end,
+        pattern = '*',
+        callback = function() pcall(vim.treesitter.start) end,
       })
     end,
   },
@@ -1779,6 +1825,11 @@ require('lazy').setup({
       vim.keymap.set('n', '<S-C-u>', function() require('opencode').command 'session.half.page.up' end, { desc = 'Scroll opencode up' })
       vim.keymap.set('n', '<S-C-d>', function() require('opencode').command 'session.half.page.down' end, { desc = 'Scroll opencode down' })
 
+      -- Stash commands (terminal mode only — active inside opencode TUI)
+      vim.keymap.set('t', '<M-s>', function() require('opencode').command 'prompt.stash' end, { desc = 'Stash opencode prompt' })
+      vim.keymap.set('t', '<M-S>', function() require('opencode').command 'prompt.stash.pop' end, { desc = 'Pop opencode stash' })
+      vim.keymap.set('t', '<M-l>', function() require('opencode').command 'prompt.stash.list' end, { desc = 'List opencode stashes' })
+
       -- You may want these if you stick with the opinionated "<C-a>" and "<C-x>" above — otherwise consider "<leader>o…".
       vim.keymap.set('n', '+', '<C-a>', { desc = 'Increment under cursor', noremap = true })
       vim.keymap.set('n', '-', '<C-x>', { desc = 'Decrement under cursor', noremap = true })
@@ -1799,6 +1850,20 @@ require('lazy').setup({
   -- require 'kickstart.plugins.indent_line',
   require 'kickstart.plugins.autopairs',
   require 'kickstart.plugins.neo-tree',
+
+  {
+    'lewis6991/satellite.nvim',
+    opts = {
+      current_only = false,
+      winblend = 50,
+      handlers = {
+        cursor = { enable = true },
+        search = { enable = true },
+        diagnostic = { enable = true, min_severity = vim.diagnostic.severity.HINT },
+        gitsigns = { enable = true },
+      },
+    },
+  },
   -- require 'kickstart.plugins.gitsigns', -- disabled: using mini.diff instead
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
