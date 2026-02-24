@@ -1677,6 +1677,7 @@ require('lazy').setup({
     event = 'BufReadPost',
     opts = {
       mode = 'topline',
+      multiline_threshold = 1,
     },
   },
 
