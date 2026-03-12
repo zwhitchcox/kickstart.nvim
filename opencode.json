@@ -1,11 +1,49 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "permission": {
+    "bash": {
+      "pnpm withenv-prod": "deny",
+      "pnpm withenv-prod *": "deny",
+      "opencode-profile": "deny",
+      "opencode-profile *": "deny",
+      "git diff": "allow",
+      "git diff *": "allow",
+      "git status": "allow",
+      "git status *": "allow",
+      "git log": "allow",
+      "git log *": "allow",
+      "git show": "allow",
+      "git show *": "allow",
+      "git branch": "allow",
+      "git branch *": "allow",
+      "git *": "ask"
+    },
     "external_directory": {
+      "~/src/**": "allow",
       "~/.local/share/nvim/**": "allow",
       "~/.local/state/opencode/**": "allow",
       "~/.config/nvim/**": "allow",
       "/tmp/**": "allow"
     }
-  }
+  },
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 10000
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "enabled": true
+    }
+  },
+  "plugin": [
+    "~/.config/opencode/plugin/ding.ts",
+    "~/.config/opencode/plugin/done_sound.ts"
+  ]
 }

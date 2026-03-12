@@ -271,6 +271,7 @@ vim.keymap.set('n', '<leader>tl', function()
     vim.o.background = 'light'
     vim.cmd.colorscheme 'bluloco-light'
   end
+  pcall(function() require('opencode').command 'theme.switch_mode' end)
 end, { desc = 'Toggle light/dark theme' })
 
 --
@@ -451,6 +452,14 @@ require('lazy').setup({
       word_diff = true,
       show_deleted = true,
       signs_staged_enable = true,
+      on_attach = function(bufnr)
+        -- Force refresh signs after attach to fix missing signs on some files
+        vim.defer_fn(function()
+          if vim.api.nvim_buf_is_valid(bufnr) then
+            pcall(require('gitsigns').refresh)
+          end
+        end, 200)
+      end,
       signs = {
         add = { text = '+' },
         change = { text = '~' },
@@ -635,7 +644,11 @@ require('lazy').setup({
       local builtin = require 'telescope.builtin'
       vim.keymap.set('n', '<leader>sh', builtin.help_tags, { desc = '[S]earch [H]elp' })
       vim.keymap.set('n', '<leader>sk', builtin.keymaps, { desc = '[S]earch [K]eymaps' })
-      vim.keymap.set('n', '<leader>sf', builtin.find_files, { desc = '[S]earch [F]iles' })
+      vim.keymap.set('n', '<leader>sf', function()
+        builtin.find_files {
+          find_command = { 'fd', '--type', 'f', '--exec-batch', 'ls', '-t' },
+        }
+      end, { desc = '[S]earch [F]iles (recent first)' })
       vim.keymap.set('n', '<leader>ss', builtin.builtin, { desc = '[S]earch [S]elect Telescope' })
       vim.keymap.set({ 'n', 'v' }, '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
@@ -1099,10 +1112,12 @@ require('lazy').setup({
       set_dark_mode = function()
         vim.o.background = 'dark'
         vim.cmd.colorscheme 'tokyonight-night'
+        pcall(function() require('opencode').command 'theme.switch_mode' end)
       end,
       set_light_mode = function()
         vim.o.background = 'light'
         vim.cmd.colorscheme 'bluloco-light'
+        pcall(function() require('opencode').command 'theme.switch_mode' end)
       end,
     },
   },
@@ -1183,7 +1198,17 @@ require('lazy').setup({
       -- - saiw) - [S]urround [A]dd [I]nner [W]ord [)]Paren
       -- - sd'   - [S]urround [D]elete [']quotes
       -- - sr)'  - [S]urround [R]eplace [)] [']
-      require('mini.surround').setup()
+      require('mini.surround').setup {
+        mappings = {
+          add = 'gsa',
+          delete = 'gsd',
+          find = 'gsf',
+          find_left = 'gsF',
+          highlight = 'gsh',
+          replace = 'gsr',
+          update_n_lines = 'gsn',
+        },
+      }
 
       -- mini.diff: TEMPORARILY DISABLED — using gitsigns instead
       --[[ mini.diff block disabled
@@ -1723,8 +1748,13 @@ require('lazy').setup({
     config = function()
       ---@type opencode.Opts
       vim.g.opencode_opts = {
-        provider = {
-          cmd = 'opencode -c --port', -- -c resumes the last session on startup
+        server = {
+          start = function()
+            require('opencode.terminal').start 'opencode -c --port'
+          end,
+          toggle = function()
+            require('opencode.terminal').toggle 'opencode -c --port'
+          end,
         },
       }
 
@@ -1773,14 +1803,14 @@ require('lazy').setup({
         end,
         desc = 'Stash opencode prompt before exit',
       })
-      vim.api.nvim_create_autocmd('VimLeavePre', {
-        callback = function()
-          for _, srv in ipairs(get_opencode_servers()) do
-            vim.fn.system('kill ' .. srv.pid)
-          end
-        end,
-        desc = 'Kill opencode server on exit',
-      })
+      -- vim.api.nvim_create_autocmd('VimLeavePre', {
+      --   callback = function()
+      --     for _, srv in ipairs(get_opencode_servers()) do
+      --       vim.fn.system('kill ' .. srv.pid)
+      --     end
+      --   end,
+      --   desc = 'Kill opencode server on exit',
+      -- })
 
       -- Pop stashed prompt when opencode terminal opens (retry until server is ready).
       local stash_popped = false

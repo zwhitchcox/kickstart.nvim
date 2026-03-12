@@ -1,0 +1,17 @@
+{
+  "bash": {
+    "echo git *": "deny",
+    "echo git status": "allow",
+    "echo git status *": "allow",
+    "echo git diff": "allow",
+    "echo git diff *": "allow",
+    "echo git log": "allow",
+    "echo git log *": "allow",
+    "echo git show": "allow",
+    "echo git show *": "allow",
+    "echo git branch": "allow",
+    "echo git branch *": "allow",
+    "echo git fetch": "allow",
+    "echo git fetch *": "allow"
+  }
+}
