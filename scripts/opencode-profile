@@ -4,6 +4,71 @@ import os
 import json
 import sys
 
+def load_profile_recursive(profile_name, profiles_dir, loaded_profiles=None):
+    if loaded_profiles is None:
+        loaded_profiles = set()
+        
+    if profile_name in loaded_profiles:
+        return {} # Prevent infinite recursion loops
+        
+    loaded_profiles.add(profile_name)
+    
+    profile_path = os.path.join(profiles_dir, f"{profile_name}.json")
+    if not os.path.exists(profile_path):
+        print(f"⚠️  Warning: Inherited profile '{profile_name}' not found at {profile_path}")
+        return {}
+
+    with open(profile_path, 'r') as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"⚠️  Error: Invalid JSON in profile '{profile_name}': {e}")
+            return {}
+
+    # Handle inheritance first
+    merged_data = {}
+    if "inherit" in data:
+        inherits = data["inherit"]
+        if isinstance(inherits, str):
+            inherits = [inherits]
+            
+        for parent in inherits:
+            parent_data = load_profile_recursive(parent, profiles_dir, loaded_profiles)
+            
+            # Merge parent data into current data
+            for perm_type, rules in parent_data.items():
+                if perm_type not in merged_data:
+                    merged_data[perm_type] = {}
+                
+                if isinstance(rules, str):
+                    merged_data[perm_type] = rules
+                elif isinstance(rules, dict):
+                    if not isinstance(merged_data[perm_type], dict):
+                        merged_data[perm_type] = {}
+                    # Add parent rules
+                    for pattern, action in rules.items():
+                        merged_data[perm_type][pattern] = action
+                        
+    # Now apply the current profile's own rules (they override inherited ones if they conflict in key order)
+    for perm_type, rules in data.items():
+        if perm_type == "inherit":
+            continue
+            
+        if perm_type not in merged_data:
+            merged_data[perm_type] = {}
+            
+        if isinstance(rules, str):
+            merged_data[perm_type] = rules
+        elif isinstance(rules, dict):
+            if not isinstance(merged_data[perm_type], dict):
+                merged_data[perm_type] = {}
+            # Add current rules
+            for pattern, action in rules.items():
+                merged_data[perm_type][pattern] = action
+                
+    return merged_data
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: opencode-profile <profile_name | clear>")
@@ -36,20 +101,18 @@ def main():
         conn.close()
         print(f"✅ Cleared all temporary permissions for session {session_id}")
         print("   (It will now fallback to your default opencode.json rules)")
-        print("\n⚠️  Remember to close and reopen the Opencode window!")
+        print("\n⚡ The new permissions will take effect on your next chat message!")
         return
 
-    profile_path = os.path.expanduser(f"~/.config/nvim/scripts/opencode-profiles/{profile_name}.json")
+    profiles_dir = os.path.expanduser("~/.config/nvim/scripts/opencode-profiles/")
+    profile_path = os.path.join(profiles_dir, f"{profile_name}.json")
+    
     if not os.path.exists(profile_path):
         print(f"Error: Profile file not found at {profile_path}")
         return
 
-    with open(profile_path, 'r') as f:
-        try:
-            profile_data = json.load(f)
-        except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON in profile file: {e}")
-            return
+    # Load and merge profile data recursively
+    profile_data = load_profile_recursive(profile_name, profiles_dir)
 
     # Mirroring Opencode's internal "fromConfig" translation logic!
     ruleset = []

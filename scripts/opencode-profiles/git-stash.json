@@ -1,0 +1,7 @@
+{
+  "inherit": ["git-read"],
+  "bash": {
+    "git stash": "allow",
+    "git stash *": "allow"
+  }
+}
