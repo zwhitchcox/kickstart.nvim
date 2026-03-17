@@ -13,7 +13,7 @@ _opencode-profile() {
   fi
   profiles+=("clear")
 
-  _describe 'command' profiles
+  _arguments '*:profile:($profiles)'
 }
 
 compdef _opencode-profile opencode-profile

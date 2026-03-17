@@ -71,12 +71,12 @@ def load_profile_recursive(profile_name, profiles_dir, loaded_profiles=None):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: opencode-profile <profile_name | clear>")
+        print("Usage: opencode-profile <profile_name...> | clear")
         print("Profiles are loaded from: ~/.config/nvim/scripts/opencode-profiles/")
-        print("Example: opencode-profile git-read")
+        print("Example: opencode-profile git-read git-stash")
         return
 
-    profile_name = sys.argv[1]
+    profile_names = sys.argv[1:]
 
     db_path = os.path.expanduser("~/.local/share/opencode/opencode.db")
     if not os.path.exists(db_path):
@@ -95,7 +95,7 @@ def main():
     session_id = row[0]
 
     # Special case: clearing all session permissions
-    if profile_name.lower() == "clear":
+    if "clear" in [p.lower() for p in profile_names]:
         cur.execute("UPDATE session SET permission = NULL WHERE id = ?", (session_id,))
         conn.commit()
         conn.close()
@@ -105,18 +105,46 @@ def main():
         return
 
     profiles_dir = os.path.expanduser("~/.config/nvim/scripts/opencode-profiles/")
-    profile_path = os.path.join(profiles_dir, f"{profile_name}.json")
     
-    if not os.path.exists(profile_path):
-        print(f"Error: Profile file not found at {profile_path}")
-        return
+    combined_profile_data = {}
 
-    # Load and merge profile data recursively
-    profile_data = load_profile_recursive(profile_name, profiles_dir)
+    for profile_name in profile_names:
+        profile_path = os.path.join(profiles_dir, f"{profile_name}.json")
+        if not os.path.exists(profile_path):
+            print(f"Error: Profile file not found at {profile_path}")
+            return
+
+        # Load and merge profile data recursively
+        profile_data = load_profile_recursive(profile_name, profiles_dir)
+
+        # Merge this profile's data into the combined data (overriding earlier ones)
+        for perm_type, rules in profile_data.items():
+            if perm_type not in combined_profile_data:
+                combined_profile_data[perm_type] = {}
+                
+            if isinstance(rules, str):
+                combined_profile_data[perm_type] = rules
+            elif isinstance(rules, dict):
+                if not isinstance(combined_profile_data[perm_type], dict):
+                    combined_profile_data[perm_type] = {}
+                for pattern, action in rules.items():
+                    combined_profile_data[perm_type][pattern] = action
 
     # Mirroring Opencode's internal "fromConfig" translation logic!
     ruleset = []
-    for permission, value in profile_data.items():
+    
+    # ALWAYS inject a baseline allow-all rule at the top.
+    # This prevents Opencode from completely overriding the global opencode.json
+    # and wiping out non-bash permissions (like MCP tools, reads, external_directory, etc)
+    # Because it is at the very top (index 0), it acts as a global fallback that has the 
+    # lowest possible priority for the findLast() engine.
+    ruleset.append({
+        "permission": "*",
+        "pattern": "*",
+        "action": "allow"
+    })
+    
+    for permission, value in combined_profile_data.items():
         if isinstance(value, str):
             ruleset.append({
                 "permission": permission,
@@ -150,10 +178,11 @@ def main():
         os.makedirs(log_dir)
     log_file = os.path.join(log_dir, "opencode-profile.log")
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    joined_profiles = " + ".join(profile_names)
     with open(log_file, "a") as f:
-        f.write(f"[{timestamp}] Switched to profile: {profile_name}\n")
+        f.write(f"[{timestamp}] Switched to profile: {joined_profiles}\n")
 
-    print(f"✅ Applied profile '{profile_name}' to all recent sessions!")
+    print(f"✅ Applied combined profiles '{joined_profiles}' to all recent sessions!")
     print("   Rules applied (bottom-most rules have highest priority!):")
     for rule in ruleset:
         print(f"   - {rule['action'].upper()}: {rule['permission']} -> {rule['pattern']}")
