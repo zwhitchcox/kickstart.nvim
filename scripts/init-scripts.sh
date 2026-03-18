@@ -31,8 +31,8 @@ install_script() {
 }
 
 # Install all specific scripts here
-install_script "opencode-profile"
-install_script "opencode-show-permissions"
+install_script "opencode-permissions"
+install_script "opencode-show-active-permissions"
 
 # Link global opencode.json config
 echo "Linking opencode.json -> ~/.config/opencode/opencode.json"
