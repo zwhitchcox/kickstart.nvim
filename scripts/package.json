@@ -1,0 +1,9 @@
+{
+  "name": "opencode-permissions-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "enquirer": "^2.4.1",
+    "better-sqlite3": "^11.8.1"
+  }
+}
